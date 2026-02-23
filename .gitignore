@@ -39,3 +39,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Ignore interview file and any files added by the assistant
+interview.md
