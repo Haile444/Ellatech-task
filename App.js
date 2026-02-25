@@ -13,30 +13,65 @@ import { ProductCard } from './src/components/ProductCard';
 
 export default function App() {
   const [user, setUser] = useState({ email: '', fullName: '', registered: false });
+  const [regError, setRegError] = useState('');                      // registration validation message
+
   const [products, setProducts] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [form, setForm] = useState({ sku: '', name: '', price: '', qty: '' });
+  const [formError, setFormError] = useState('');                    // general product‑form error message
+  const [fieldErrors, setFieldErrors] = useState({});                // per‑field errors
+
   const [page, setPage] = useState(1);
 
   const handleRegister = () => {
-    if (!user.email.includes('@') || !user.fullName) return Alert.alert("Error", "Valid name and email required");
+    // basic registration validation
+    if (!user.fullName || !user.email.includes('@')) {
+      setRegError('Please enter a valid name and email address');
+      return;
+    }
+
+    setRegError('');
     setUser({ ...user, registered: true });
   };
   
   const addProduct = () => {
-    if (!form.sku || !form.name || !form.price || !form.qty) return Alert.alert("Error", "All fields required");
-    if (products.some(p => p.sku === form.sku)) return Alert.alert("Error", "SKU must be unique");
+    // clear previous errors
+    setFormError('');
+    setFieldErrors({});
 
-    const product = {
-      sku: form.sku,
-      name: form.name,
-      price: form.price,
-      quantity: parseInt(form.qty) || 0,
-      lastUpdated: new Date().toLocaleTimeString(),
-    };
-    setProducts(prev => [...prev, product]);
-    logAction(form.sku, 'INITIAL', parseInt(form.qty) || 0);
-    setForm({ sku: '', name: '', price: '', qty: '' });
+    const errs = {};
+    if (!form.sku) errs.sku = 'SKU is required';
+    if (!form.name) errs.name = 'Name is required';
+    if (!form.price || Number.isNaN(parseFloat(form.price))) errs.price = 'Valid price required';
+    if (!form.qty || Number.isNaN(parseInt(form.qty))) errs.qty = 'Valid quantity required';
+
+    if (Object.keys(errs).length) {
+      setFieldErrors(errs);
+      setFormError('Please fix the highlighted fields');
+      return;
+    }
+
+    if (products.some(p => p.sku === form.sku)) {
+      setFormError('SKU must be unique');
+      return;
+    }
+
+    try {
+      const product = {
+        sku: form.sku,
+        name: form.name,
+        price: form.price,
+        quantity: parseInt(form.qty) || 0,
+        lastUpdated: new Date().toLocaleTimeString(),
+      };
+      setProducts(prev => [...prev, product]);
+      logAction(form.sku, 'INITIAL', parseInt(form.qty) || 0);
+      setForm({ sku: '', name: '', price: '', qty: '' });
+    } catch (e) {
+      // unexpected error
+      Alert.alert('Error', 'Unable to add product');
+      console.error(e);
+    }
   };
 
   const adjustStock = (sku, change) => {
@@ -60,8 +95,22 @@ export default function App() {
         <SafeAreaView className="flex-1 bg-slate-50 p-6 justify-center" style={{ flex: 1, backgroundColor: '#f8fafc', padding: 24, justifyContent: 'center' }}>
           <View style={{ backgroundColor: '#fff', borderRadius: 20, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 4 }}>
             <Text className="text-3xl font-black mb-6 text-slate-800 text-center" style={{ fontSize: 28, fontWeight: '800', marginBottom: 16, color: '#0f172a', textAlign: 'center' }}>Ellatech Setup</Text>
-            <Input placeholder="Full Name" onChangeText={t => setUser({...user, fullName: t})} />
-            <Input placeholder="Email" keyboardType="email-address" onChangeText={t => setUser({...user, email: t})} />
+            <Input
+              placeholder="Full Name"
+              value={user.fullName}
+              onChangeText={t => setUser({...user, fullName: t})}
+              error={Boolean(regError && !user.fullName)}
+            />
+            <Input
+              placeholder="Email"
+              keyboardType="email-address"
+              value={user.email}
+              onChangeText={t => setUser({...user, email: t})}
+              error={Boolean(regError && !user.email.includes('@'))}
+            />
+            {regError ? (
+              <Text className="text-red-600 text-sm mt-1">{regError}</Text>
+            ) : null}
             <TouchableOpacity className="bg-blue-600 p-4 rounded-2xl shadow-lg" onPress={handleRegister} style={{ backgroundColor: '#1e40af', padding: 12, borderRadius: 16, marginTop: 8 }}>
               <Text className="text-white text-center font-bold text-lg" style={{ color: '#fff', textAlign: 'center', fontWeight: '700' }}>Enter Dashboard</Text>
             </TouchableOpacity>
@@ -75,14 +124,51 @@ export default function App() {
             <View className="bg-blue-50 p-5 rounded-3xl mb-8 border border-blue-100" style={{ backgroundColor: '#eef2ff', padding: 16, borderRadius: 18, marginBottom: 18 }}>
               <Text className="font-bold text-blue-800 mb-4">Add New Product</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-                <View style={{ width: '48%' }}><Input placeholder="SKU" value={form.sku} onChangeText={t => setForm({...form, sku: t})} /></View>
-                <View style={{ width: '48%' }}><Input placeholder="Name" value={form.name} onChangeText={t => setForm({...form, name: t})} /></View>
-                <View style={{ width: '48%' }}><Input placeholder="Price" keyboardType="numeric" value={form.price} onChangeText={t => setForm({...form, price: t})} /></View>
-                <View style={{ width: '48%' }}><Input placeholder="Qty" keyboardType="numeric" value={form.qty} onChangeText={t => setForm({...form, qty: t})} /></View>
+                <View style={{ width: '48%' }}>
+                  <Input
+                    placeholder="SKU"
+                    value={form.sku}
+                    onChangeText={t => setForm({...form, sku: t})}
+                    error={Boolean(fieldErrors.sku)}
+                  />
+                  {fieldErrors.sku && <Text className="text-red-600 text-xs">{fieldErrors.sku}</Text>}
+                </View>
+                <View style={{ width: '48%' }}>
+                  <Input
+                    placeholder="Name"
+                    value={form.name}
+                    onChangeText={t => setForm({...form, name: t})}
+                    error={Boolean(fieldErrors.name)}
+                  />
+                  {fieldErrors.name && <Text className="text-red-600 text-xs">{fieldErrors.name}</Text>}
+                </View>
+                <View style={{ width: '48%' }}>
+                  <Input
+                    placeholder="Price"
+                    keyboardType="numeric"
+                    value={form.price}
+                    onChangeText={t => setForm({...form, price: t})}
+                    error={Boolean(fieldErrors.price)}
+                  />
+                  {fieldErrors.price && <Text className="text-red-600 text-xs">{fieldErrors.price}</Text>}
+                </View>
+                <View style={{ width: '48%' }}>
+                  <Input
+                    placeholder="Qty"
+                    keyboardType="numeric"
+                    value={form.qty}
+                    onChangeText={t => setForm({...form, qty: t})}
+                    error={Boolean(fieldErrors.qty)}
+                  />
+                  {fieldErrors.qty && <Text className="text-red-600 text-xs">{fieldErrors.qty}</Text>}
+                </View>
               </View>
               <TouchableOpacity className="bg-blue-800 p-4 rounded-xl" onPress={addProduct} style={{ backgroundColor: '#1e40af', padding: 12, borderRadius: 12, marginTop: 10 }}>
                 <Text className="text-white text-center font-bold">Register Product</Text>
               </TouchableOpacity>
+              {formError ? (
+                <Text className="text-red-600 text-sm mt-2">{formError}</Text>
+              ) : null}
             </View>
 
             {products.map(item => <ProductCard key={item.sku} item={item} onAdjust={adjustStock} />)}
